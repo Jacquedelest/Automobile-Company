@@ -1,0 +1,227 @@
+---
+title: "Automobile Customer Segmentation"
+output: html_notebook
+---
+
+Import data set and read data set into data frame
+```{r}
+customers <- read.csv("C:/Users/Jacque de l'est/Documents/Datasets for Data Science/Automobile Company Customers.csv", stringsAsFactors = FALSE)
+```
+
+show data frame
+```{r}
+head(customers)
+```
+
+Show data frame shape and columns
+```{r}
+str(customers)
+```
+
+show descriptive statistics of data set
+```{r}
+summary(customers)
+```
+
+See missing values of data frame
+```{r}
+colSums(is.na(customers))
+```
+
+Fill missing values of Work_Experience with 0 and Family_Size with 1
+```{r}
+customers$Work_Experience[is.na(customers$Work_Experience)] <- 0
+customers$Family_Size[is.na(customers$Family_Size)] <- 1
+colSums(is.na(customers))
+```
+
+Check unique sum and values of data frame columns
+```{r}
+sapply(customers, function(x) length(unique(x)))
+```
+```{r}
+unique(customers$Gender)
+unique(customers$Ever_Married)
+unique(customers$Graduated)
+unique(customers$Profession)
+unique(customers$Spending_Score)
+unique(customers$Var_1)
+```
+
+Show sum of empty values
+```{r}
+sum(customers$Ever_Married == "")
+sum(customers$Graduated == "")
+sum(customers$Profession == "")
+sum(customers$Var_1 == "")
+```
+
+Change empty values to NA values
+```{r}
+customers[customers == ""] <- NA
+head(customers)
+```
+
+Fill NA values with proper values
+```{r}
+customers$Ever_Married[is.na(customers$Ever_Married)] <- "No"
+customers$Graduated[is.na(customers$Graduated)] <- "No"
+customers$Profession[is.na(customers$Profession)] <- "others"
+customers$Var_1[is.na(customers$Var_1)] <- "Cat_0"
+sum(is.na(customers))
+```
+
+Show distribution of categorical data
+```{r}
+library(ggplot2)
+ggplot(customers, aes(x = Gender, fill = Gender)) + geom_bar()
+ggplot(customers, aes(x = Ever_Married, fill = Ever_Married)) + geom_bar()
+ggplot(customers, aes(x = Graduated, fill = Graduated)) + geom_bar()
+ggplot(customers, aes(x = Profession, fill = Profession)) + geom_bar()
+ggplot(customers, aes(x = Spending_Score, fill = Spending_Score)) + geom_bar()
+ggplot(customers, aes(x = Var_1, fill = Var_1)) + geom_bar()
+```
+
+Show distribution of numerical columns
+```{r}
+# Distribution of Age
+#histogram & mean line
+ggplot(customers, aes(x=Age, fill=Age)) +
+    geom_histogram(color = "black", fill = "white") + geom_vline(aes(xintercept=mean(Age)),
+               color="red", linetype="dashed", size=1)
+
+
+#density curve
+ggplot(customers, aes(x=Age)) + geom_density()
+
+#histogram and mean line overlaid with kernel density curve
+ggplot(customers, aes(x=Age)) + 
+    geom_histogram(aes(y=..density..),
+                   colour="black", fill="white") +
+    geom_density(alpha=0.2, fill="#FF6666") + geom_vline(aes(xintercept=mean(Age)),
+               color="red", linetype="dashed", size=1)
+```
+```{r}
+# Distribution of Work Experience
+#histogram & mean line
+ggplot(customers, aes(x=Work_Experience, fill=Work_Experience)) +
+    geom_histogram(binwidth = 1, color = "black", fill = "white") + geom_vline(aes(xintercept=mean(Work_Experience)),
+               color="red", linetype="dashed", size=1)
+```
+```{r}
+# Distribution of Family Size
+#histogram & mean line
+ggplot(customers, aes(x=Family_Size, fill=Family_Size)) +
+    geom_histogram(binwidth = 1, color = "black", fill = "white") + geom_vline(aes(xintercept=mean(Family_Size)),
+               color="red", linetype="dashed", size=1)
+```
+
+Drop column ID
+```{r}
+customers_new <- customers[-1]
+head(customers_new)
+```
+
+Convert categorical columns to numerical columns
+```{r}
+cat_columns <- data.matrix(customers_new[c("Gender","Ever_Married","Graduated","Profession","Spending_Score","Var_1")])
+head(cat_columns)
+```
+
+Merge converted categorical columns with original data frame
+```{r}
+customers <- data.frame(customers, cat_columns)
+head(customers)
+```
+
+Create data master from categorical and converted categorical columns
+```{r}
+Gender <- unique(customers[c('Gender','Gender.1')])
+Ever_Married <- unique(customers[c('Ever_Married','Ever_Married.1')])
+Graduated <- unique(customers[c('Graduated', 'Graduated.1')])
+Profession <- unique(customers[c('Profession','Profession.1')])
+Spending_Score <- unique(customers[c('Spending_Score','Spending_Score.1')])
+Var_1 <- unique(customers[c('Var_1','Var_1.1')])
+```
+
+Create a variable for clustering with k-means
+```{r}
+used_data <- c('Gender.1','Ever_Married.1','Age','Graduated.1','Profession.1','Work_Experience','Spending_Score.1','Family_Size','Var_1.1')
+```
+
+Look for optimal cluster for k-means clustering
+```{r}
+set.seed(100)
+sse <- sapply(1:10, 
+			  function(param_k)
+			  {kmeans(customers[used_data], param_k, nstart=25)$tot.withinss}
+			 )
+print(sse)
+
+#graphic elbow effect
+max_cluster <- 10
+ssdata = data.frame(cluster=c(1:max_cluster),sse)
+ggplot(ssdata, aes(x=cluster,y=sse)) +
+                geom_line(color="red") + geom_point() +
+                ylab("Within Cluster Sum of Squares") + xlab("Number of Cluster") +
+                geom_text(aes(label=format(round(sse, 2), nsmall = 2)),hjust=-0.2, vjust=-0.5) +
+  scale_x_discrete(limits=c(1:max_cluster))
+
+```
+
+Cluster with k-means
+```{r}
+#k-means function creates 5 clusters with 25 random scenarios and saves them into segmentation
+set.seed(100)
+segmentation <- kmeans(x = customers[used_data], centers = 5, nstart = 25)
+segmentation
+```
+
+Merge clustering result into data frame customers
+```{r}
+customers$Cluster <- segmentation$cluster
+str(customers)
+```
+
+Check clustering result
+```{r}
+head(which(customers$Cluster == 1))
+length(which(customers$Cluster == 1))
+segmentation$ifault
+customers[which(customers$Cluster == 1),]
+```
+
+Name the segmentation
+```{r}
+CustomerSegmentation <- data.frame(Cluster = c(1,2,3,4,5), Segmentation = c("Diamond Senior", "Silver Middle", "Silver Young", "Gold Professional", "Diamond Professional"))
+```
+
+Combine the references and save to file
+```{r}
+ClusterID <- list(Gender = Gender, Ever_Married = Ever_Married, Graduated = Graduated, Profession = Profession, Spending_Score = Spending_Score, Var_1 = Var_1, segmentation = segmentation, CustomerSegmentation = CustomerSegmentation, used_data = used_data)
+saveRDS(ClusterID, "Cluster ID.rds")
+```
+
+Load Cluster Identity from file
+```{r}
+Cluster.ID <- readRDS(file = 'Cluster ID.rds')
+Cluster.ID
+```
+Test clustering with new data
+```{r}
+#create new data
+new_data <- data.frame(ID = '257157', Gender = 'Male', Ever_Married = 'No', Age = 34, Graduated = 'Yes', Profession = 'Artist', Work_Experience = 6, Spending_Score = 'Low', Family_Size = 1, Var_1 = 'Cat_2')
+
+#merge new data with data from Cluster Identity
+new_data <- merge(new_data, Cluster.ID$Gender)
+new_data <- merge(new_data, Cluster.ID$Ever_Married)
+new_data <- merge(new_data, Cluster.ID$Graduated)
+new_data <- merge(new_data, Cluster.ID$Profession)
+new_data <- merge(new_data, Cluster.ID$Spending_Score)
+new_data <- merge(new_data, Cluster.ID$Var_1)
+new_data
+
+#clustering new data
+Cluster.ID$CustomerSegmentation[which.min(sapply(1:5, function(x) sum((new_data[Cluster.ID$used_data] - Cluster.ID$segmentation$centers[x,])^2))),]
+```
+
